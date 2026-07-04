@@ -1,7 +1,7 @@
 """Scrape Peekaboo Guru card discounts for Karachi restaurants.
 
 Runs weekly (Mondays via GitHub Actions). Matches Peekaboo entities to Bhooka
-restaurants by normalized name, then upserts associated card deals into special_offers.
+restaurants by name and slug, then upserts associated card deals into special_offers.
 """
 
 from __future__ import annotations
@@ -28,35 +28,80 @@ GUEST_JWT = (
     "2mb26xL4Qt7FfBQZ-XQvp-fhecMpaVUVXWp_GEST_6U"
 )
 KARACHI = {"country": "Pakistan", "city": "Karachi", "lat": 24.861462, "long": 67.009939}
-DATABASE_URL = os.environ["DATABASE_URL"]
-MATCH_THRESHOLD = 0.82
+MATCH_THRESHOLD = 0.78
+HEADERS = {"Authorization": f"Bearer {GUEST_JWT}", "Content-Type": "application/json"}
 
 
 def normalize_name(name: str) -> str:
     cleaned = re.sub(r"[^a-z0-9\s]", " ", name.lower())
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    for suffix in (" karachi", " restaurant", " resturant", " cafe", " bbq"):
-        if cleaned.endswith(suffix):
-            cleaned = cleaned[: -len(suffix)].strip()
+    for token in (" karachi", " restaurant", " resturant", " cafe", " bbq", " branch", " the "):
+        cleaned = cleaned.replace(token, " ")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
 
 
-def best_entity_match(name: str, entities: list[dict]) -> dict | None:
-    target = normalize_name(name)
-    best: dict | None = None
+def slug_base(slug: str) -> str:
+    base = slug.lower().strip()
+    base = re.sub(r"-[a-z0-9]{6}$", "", base)
+    base = re.sub(r"-karachi$", "", base)
+    return base
+
+
+def name_similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    if a == b:
+        return 1.0
+    if a in b or b in a:
+        return 0.92
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def restaurant_score(restaurant: Restaurant) -> float:
+    rating = float(restaurant.rating_avg or 0)
+    reviews = int(restaurant.review_count or 0)
+    return rating * 1000 + reviews
+
+
+def build_restaurant_index(restaurants: list[Restaurant]) -> tuple[dict[str, Restaurant], dict[str, Restaurant]]:
+    by_name: dict[str, Restaurant] = {}
+    by_slug: dict[str, Restaurant] = {}
+
+    for restaurant in restaurants:
+        norm = normalize_name(restaurant.name)
+        existing = by_name.get(norm)
+        if not existing or restaurant_score(restaurant) > restaurant_score(existing):
+            by_name[norm] = restaurant
+
+        for key in {slug_base(restaurant.slug), normalize_name(restaurant.name).replace(" ", "-")}:
+            if not key:
+                continue
+            existing_slug = by_slug.get(key)
+            if not existing_slug or restaurant_score(restaurant) > restaurant_score(existing_slug):
+                by_slug[key] = restaurant
+
+    return by_name, by_slug
+
+
+def match_restaurant(entity: dict, by_name: dict[str, Restaurant], by_slug: dict[str, Restaurant]) -> Restaurant | None:
+    entity_name = normalize_name(entity.get("name", ""))
+    entity_slug = slug_base(entity.get("slug", ""))
+
+    if entity_slug and entity_slug in by_slug:
+        return by_slug[entity_slug]
+
+    if entity_name and entity_name in by_name:
+        return by_name[entity_name]
+
+    best: Restaurant | None = None
     best_score = 0.0
-    for entity in entities:
-        candidate = normalize_name(entity.get("name", ""))
-        if not candidate:
-            continue
-        if candidate == target:
-            return entity
-        score = SequenceMatcher(None, target, candidate).ratio()
-        if target in candidate or candidate in target:
-            score = max(score, 0.9)
+    for norm, restaurant in by_name.items():
+        score = name_similarity(entity_name, norm)
         if score > best_score:
             best_score = score
-            best = entity
+            best = restaurant
+
     if best_score >= MATCH_THRESHOLD:
         return best
     return None
@@ -67,18 +112,12 @@ async def fetch_all_entities(client: httpx.AsyncClient) -> list[dict]:
     offset = 0
     limit = 100
     while True:
-        body = {
-            "limit": limit,
-            "offset": offset,
-            "language": "en",
-            "category": "food",
-            **KARACHI,
-        }
+        body = {"limit": limit, "offset": offset, "language": "en", "category": "food", **KARACHI}
         response = await client.post(
             f"{PEEKABOO_BASE}/api/v5/entities",
             json=body,
-            headers={"Authorization": f"Bearer {GUEST_JWT}", "Content-Type": "application/json"},
-            timeout=30,
+            headers=HEADERS,
+            timeout=60,
         )
         response.raise_for_status()
         batch = response.json()
@@ -88,8 +127,6 @@ async def fetch_all_entities(client: httpx.AsyncClient) -> list[dict]:
         if not batch[-1].get("nextPage", False):
             break
         offset += limit
-        if offset > 5000:
-            break
     return entities
 
 
@@ -109,8 +146,8 @@ async def fetch_entity_deals(client: httpx.AsyncClient, entity_id: int) -> list[
         response = await client.post(
             f"{PEEKABOO_BASE}/api/v8/entity/deals",
             json=body,
-            headers={"Authorization": f"Bearer {GUEST_JWT}", "Content-Type": "application/json"},
-            timeout=30,
+            headers=HEADERS,
+            timeout=60,
         )
         if response.status_code != 200:
             break
@@ -195,7 +232,11 @@ async def upsert_deals(db: AsyncSession, restaurant_id: str, entity_id: int, dea
 
 
 async def run_scraper() -> None:
-    engine = create_async_engine(DATABASE_URL)
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise SystemExit("DATABASE_URL environment variable is required")
+
+    engine = create_async_engine(database_url)
     Session = async_sessionmaker(engine, class_=AsyncSession)
 
     async with httpx.AsyncClient() as client, Session() as db:
@@ -211,31 +252,40 @@ async def run_scraper() -> None:
             )
         )
         restaurants = result.scalars().all()
-        print(f"Matching {len(restaurants)} Bhooka restaurants")
+        by_name, by_slug = build_restaurant_index(restaurants)
+        print(f"Indexed {len(by_name)} unique restaurant names from {len(restaurants)} rows")
 
         matched = 0
         offer_count = 0
-        for restaurant in restaurants:
-            entity = best_entity_match(restaurant.name, with_deals)
-            if not entity:
+        unmatched: list[str] = []
+
+        for entity in with_deals:
+            restaurant = match_restaurant(entity, by_name, by_slug)
+            if not restaurant:
+                unmatched.append(entity.get("name", "?"))
                 continue
 
             entity_id = entity["entityId"]
+            deals = await fetch_entity_deals(client, entity_id)
+            if not deals:
+                continue
+
             await db.execute(
                 text("UPDATE restaurants SET peekaboo_entity_id = :eid WHERE id = :rid"),
                 {"eid": entity_id, "rid": str(restaurant.id)},
             )
 
-            deals = await fetch_entity_deals(client, entity_id)
-            if not deals:
-                continue
-
             matched += 1
             offer_count += await upsert_deals(db, str(restaurant.id), entity_id, deals)
-            print(f"  ✓ {restaurant.name} → {len(deals)} card offers")
+            print(f"  ✓ {entity.get('name')} → {restaurant.name} ({len(deals)} offers)")
+            await asyncio.sleep(0.15)
 
         await db.commit()
         print(f"Done: {matched} restaurants matched, {offer_count} offers upserted")
+        if unmatched:
+            print(f"Unmatched Peekaboo entities ({len(unmatched)}): {', '.join(unmatched[:20])}")
+            if len(unmatched) > 20:
+                print(f"  ... and {len(unmatched) - 20} more")
 
 
 if __name__ == "__main__":
