@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildOpeningTwiml } from "@/lib/voice-agent";
 
 export const runtime = "nodejs";
 
@@ -37,28 +38,24 @@ export async function POST(request: Request) {
     tomorrow.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   const time = body.time || "8:00 PM";
 
-  const baseUrl =
-    process.env.PUBLIC_APP_URL ||
-    process.env.URL ||
-    `${request.headers.get("x-forwarded-proto") || "https"}://${request.headers.get("x-forwarded-host") || request.headers.get("host") || "bhooka-book.netlify.app"}`;
+  const baseUrl = "https://bhooka-book.netlify.app";
 
-  const params = new URLSearchParams({
+  const ctx = {
     guestName,
-    partySize: String(partySize),
+    partySize,
     restaurant,
     date,
     time,
-    step: "ask",
-  });
+    step: "ask" as const,
+  };
 
-  const twimlUrl = `${baseUrl}/api/voice/twiml?${params.toString()}`;
+  const inlineTwiml = buildOpeningTwiml(ctx, baseUrl);
   const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
 
   const form = new URLSearchParams({
     To: to,
     From: fromNumber,
-    Url: twimlUrl,
-    Method: "POST",
+    Twiml: inlineTwiml,
     Record: "true",
   });
 
@@ -86,6 +83,6 @@ export async function POST(request: Request) {
     call_sid: payload.sid,
     status: payload.status,
     to,
-    twiml_url: twimlUrl,
+    note: "Twilio trial accounts play a short prompt first — press any key on your phone to hear the booking agent.",
   });
 }

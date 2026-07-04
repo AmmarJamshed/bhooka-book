@@ -45,7 +45,7 @@ export function bookingQueryString(ctx: BookingContext): string {
 }
 
 function gatherBlock(actionUrl: string, retryUrl: string, prompt: string): string {
-  return `<Gather input="speech" action="${escapeXml(actionUrl)}" method="POST" speechTimeout="auto" timeout="8" language="en-IN" hints="yes,no,confirmed,available,not available,busy,alternative,ok,sure,cancel">
+  return `<Gather input="speech dtmf" action="${escapeXml(actionUrl)}" method="POST" speechTimeout="auto" timeout="10" language="en-IN" hints="yes,no,confirmed,available,not available,busy,alternative,ok,sure,cancel,one,two,three" numDigits="1">
     <Say voice="Polly.Aditi">${escapeXml(prompt)}</Say>
   </Gather>
   <Say voice="Polly.Aditi">I did not hear a response. Let me try once more.</Say>
@@ -62,7 +62,7 @@ export function buildOpeningTwiml(ctx: BookingContext, baseUrl: string): string 
   } else if (ctx.step === "alternative") {
     opening = `Thank you. What alternative date or time would work for a table of ${ctx.partySize} under ${ctx.guestName}?`;
   } else {
-    opening = `Assalam o Alaikum, and hello. This is the Bhooka Book AI assistant. I am calling on behalf of ${ctx.guestName} to book a table for ${ctx.partySize} people at ${ctx.restaurant} on ${ctx.date} at ${ctx.time}. Do you have availability for this reservation?`;
+    opening = `Thank you for taking the call. Assalam o Alaikum. This is the Bhooka Book AI assistant. I am calling on behalf of ${ctx.guestName} to book a table for ${ctx.partySize} people at ${ctx.restaurant} on ${ctx.date} at ${ctx.time}. Do you have availability? Please say yes or no.`;
   }
 
   const gatherAction =

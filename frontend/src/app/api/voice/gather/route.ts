@@ -14,7 +14,21 @@ export async function POST(request: Request) {
   const ctx = parseBookingContext(url.searchParams);
   const form = await request.formData();
   const speech = (form.get("SpeechResult")?.toString() || "").trim();
+  const digits = form.get("Digits")?.toString() || "";
   const baseUrl = getPublicBaseUrl(request);
+
+  if (digits === "1") {
+    const twiml = buildOutcomeTwiml("confirmed", ctx, baseUrl);
+    return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
+  }
+  if (digits === "2") {
+    const twiml = buildOutcomeTwiml("alternative", ctx, baseUrl);
+    return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
+  }
+  if (digits === "3") {
+    const twiml = buildOutcomeTwiml("rejected", ctx, baseUrl);
+    return new NextResponse(twiml, { headers: { "Content-Type": "text/xml" } });
+  }
 
   if (!speech) {
     const twiml = buildOutcomeTwiml("unclear", ctx, baseUrl);
