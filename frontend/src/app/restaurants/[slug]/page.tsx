@@ -189,7 +189,7 @@ export default function RestaurantDetailPage() {
               ))
             ) : (
               <p className="py-8 text-center text-muted-foreground">
-                No card discounts listed yet. Check back after our daily Peekaboo sync.
+                No card discounts listed yet. Check back after our weekly Peekaboo sync (Mondays).
               </p>
             )}
           </div>

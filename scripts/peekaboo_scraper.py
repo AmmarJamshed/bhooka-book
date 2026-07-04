@@ -1,7 +1,7 @@
 """Scrape Peekaboo Guru card discounts for Karachi restaurants.
 
-Matches Peekaboo entities to Bhooka restaurants by normalized name,
-then upserts associated card deals into special_offers.
+Runs weekly (Mondays via GitHub Actions). Matches Peekaboo entities to Bhooka
+restaurants by normalized name, then upserts associated card deals into special_offers.
 """
 
 from __future__ import annotations

@@ -1,13 +1,14 @@
-# Daily Peekaboo Guru card-offer scraper for Karachi restaurants
+# Weekly Peekaboo Guru card-offer scraper for Karachi restaurants
+# Card discounts change infrequently — runs every Monday at 1:30 PM PKT.
 #
 # Required GitHub secrets:
 #   DATABASE_URL — postgresql+asyncpg://postgres:PASSWORD@db.fpyfshycjtqqrfggvcay.supabase.co:5432/postgres
 
-name: Daily Peekaboo Card Offers Scraper
+name: Weekly Peekaboo Card Offers Scraper
 
 on:
   schedule:
-    - cron: "30 8 * * *"  # 1:30 PM PKT — after SERP scrape
+    - cron: "30 8 * * 1"  # Monday 1:30 PM PKT (8:30 AM UTC)
   workflow_dispatch:
 
 jobs:
