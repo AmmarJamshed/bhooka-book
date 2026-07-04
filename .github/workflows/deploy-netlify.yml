@@ -5,6 +5,7 @@
 #   NETLIFY_AUTH_TOKEN  — from https://app.netlify.com/user/applications
 #   NETLIFY_SITE_ID     — 536c8ea3-dd14-4ecf-b89f-69d122a086a0
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY
+#   GROQ_API_KEY        — for AI Concierge (/api/ai/chat)
 
 name: Deploy to Netlify
 
@@ -39,6 +40,14 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Configure Netlify runtime env
+        run: |
+          netlify env:set GROQ_API_KEY "${{ secrets.GROQ_API_KEY }}" --context production --force
+          netlify env:set GROQ_MODEL "llama-3.3-70b-versatile" --context production --force
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
       - name: Deploy to Netlify
         run: netlify deploy --prod --build
         env:
@@ -46,3 +55,5 @@ jobs:
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           NEXT_PUBLIC_SUPABASE_URL: https://fpyfshycjtqqrfggvcay.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: llama-3.3-70b-versatile

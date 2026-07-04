@@ -110,12 +110,18 @@ export const api = {
   getMyReservations: (token: string) =>
     fetchAPI<Reservation[]>("/reservations/me", { headers: { Authorization: `Bearer ${token}` } }),
 
-  chat: (message: string, sessionId?: string, token?: string) =>
-    fetchAPI<{ role: string; content: string; session_id?: string }>("/ai/chat", {
+  chat: async (message: string, sessionId?: string, token?: string) => {
+    const res = await fetch("/api/ai/chat", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, session_id: sessionId }),
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(error.detail || "AI chat request failed");
+    }
+    return res.json() as Promise<{ role: string; content: string; session_id?: string }>;
+  },
 
   getFavorites: (token: string) =>
     fetchAPI<Array<{ restaurant_id: string }>>("/favorites", { headers: { Authorization: `Bearer ${token}` } }),
