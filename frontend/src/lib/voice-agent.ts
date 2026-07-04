@@ -7,6 +7,7 @@ export type BookingContext = {
   date: string;
   time: string;
   step: "ask" | "retry" | "alternative";
+  mode?: "outbound" | "inbound";
 };
 
 export type CallOutcome = "confirmed" | "rejected" | "alternative" | "unclear";
@@ -29,6 +30,7 @@ export function parseBookingContext(params: URLSearchParams): BookingContext {
     date: params.get("date") || "today",
     time: params.get("time") || "7:00 PM",
     step: step === "retry" || step === "alternative" ? step : "ask",
+    mode: params.get("mode") === "inbound" ? "inbound" : "outbound",
   };
 }
 
@@ -61,8 +63,10 @@ export function buildOpeningTwiml(ctx: BookingContext, baseUrl: string): string 
     opening = `Sorry, I did not catch that clearly. I am calling from Bhooka Book to book a table for ${ctx.partySize} guests under the name ${ctx.guestName} on ${ctx.date} at ${ctx.time}. Is that available? Please say yes or no.`;
   } else if (ctx.step === "alternative") {
     opening = `Thank you. What alternative date or time would work for a table of ${ctx.partySize} under ${ctx.guestName}?`;
+  } else if (ctx.mode === "inbound") {
+    opening = `Welcome to the Bhooka Book voice demo. You are the restaurant. I am the AI agent calling on behalf of ${ctx.guestName} to book a table for ${ctx.partySize} people at ${ctx.restaurant} on ${ctx.date} at ${ctx.time}. Do you have availability? Please say yes or no, or press 1 for yes, 2 for another time, 3 to decline.`;
   } else {
-    opening = `Thank you for taking the call. Assalam o Alaikum. This is the Bhooka Book AI assistant. I am calling on behalf of ${ctx.guestName} to book a table for ${ctx.partySize} people at ${ctx.restaurant} on ${ctx.date} at ${ctx.time}. Do you have availability? Please say yes or no.`;
+    opening = `Assalam o Alaikum. This is the Bhooka Book AI assistant calling on behalf of ${ctx.guestName} to book a table for ${ctx.partySize} people at ${ctx.restaurant} on ${ctx.date} at ${ctx.time}. Do you have availability? Please say yes or no, or press 1 for yes, 2 for another time, 3 to decline.`;
   }
 
   const gatherAction =
