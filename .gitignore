@@ -35,3 +35,7 @@ build/
 
 # Logs
 *.log
+
+# Netlify local state
+.netlify/
+frontend/.netlify/
