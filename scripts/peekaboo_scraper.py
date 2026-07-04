@@ -28,16 +28,26 @@ GUEST_JWT = (
     "2mb26xL4Qt7FfBQZ-XQvp-fhecMpaVUVXWp_GEST_6U"
 )
 KARACHI = {"country": "Pakistan", "city": "Karachi", "lat": 24.861462, "long": 67.009939}
-MATCH_THRESHOLD = 0.78
+MATCH_THRESHOLD = 0.86
 HEADERS = {"Authorization": f"Bearer {GUEST_JWT}", "Content-Type": "application/json"}
+GENERIC_NAMES = frozenset({"restaurant", "karachi", "food", "cafe", "kitchen", "dhaba"})
+
+
+def is_matchable_name(norm: str) -> bool:
+    if not norm or norm in GENERIC_NAMES:
+        return False
+    if len(norm) < 6:
+        return False
+    if len(norm.split()) < 2:
+        return False
+    return True
 
 
 def normalize_name(name: str) -> str:
     cleaned = re.sub(r"[^a-z0-9\s]", " ", name.lower())
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    for token in (" karachi", " restaurant", " resturant", " cafe", " bbq", " branch", " the "):
-        cleaned = cleaned.replace(token, " ")
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if cleaned.endswith(" karachi"):
+        cleaned = cleaned[: -len(" karachi")].strip()
     return cleaned
 
 
@@ -53,9 +63,11 @@ def name_similarity(a: str, b: str) -> float:
         return 0.0
     if a == b:
         return 1.0
-    if a in b or b in a:
-        return 0.92
-    return SequenceMatcher(None, a, b).ratio()
+    ratio = SequenceMatcher(None, a, b).ratio()
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    if len(shorter) >= 10 and shorter in longer:
+        ratio = max(ratio, 0.9)
+    return ratio
 
 
 def restaurant_score(restaurant: Restaurant) -> float:
@@ -70,6 +82,8 @@ def build_restaurant_index(restaurants: list[Restaurant]) -> tuple[dict[str, Res
 
     for restaurant in restaurants:
         norm = normalize_name(restaurant.name)
+        if not is_matchable_name(norm):
+            continue
         existing = by_name.get(norm)
         if not existing or restaurant_score(restaurant) > restaurant_score(existing):
             by_name[norm] = restaurant
@@ -113,20 +127,27 @@ async def fetch_all_entities(client: httpx.AsyncClient) -> list[dict]:
     limit = 100
     while True:
         body = {"limit": limit, "offset": offset, "language": "en", "category": "food", **KARACHI}
-        response = await client.post(
-            f"{PEEKABOO_BASE}/api/v5/entities",
-            json=body,
-            headers=HEADERS,
-            timeout=60,
-        )
-        response.raise_for_status()
-        batch = response.json()
+        batch: list[dict] = []
+        for attempt in range(4):
+            response = await client.post(
+                f"{PEEKABOO_BASE}/api/v5/entities",
+                json=body,
+                headers=HEADERS,
+                timeout=60,
+            )
+            if response.status_code >= 500:
+                await asyncio.sleep(2**attempt)
+                continue
+            response.raise_for_status()
+            batch = response.json()
+            break
         if not batch:
             break
         entities.extend(batch)
         if not batch[-1].get("nextPage", False):
             break
         offset += limit
+        await asyncio.sleep(0.25)
     return entities
 
 

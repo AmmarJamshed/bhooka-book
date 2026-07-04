@@ -32,4 +32,9 @@ jobs:
       - name: Run Peekaboo scraper
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python scripts/peekaboo_scraper.py
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "ERROR: DATABASE_URL secret is not set in GitHub repository secrets"
+            exit 1
+          fi
+          python scripts/peekaboo_scraper.py
