@@ -33,13 +33,21 @@ function mapRestaurant(row: Record<string, unknown>): Restaurant {
 export const supabaseData = {
   async getTrending(limit = 8): Promise<Restaurant[]> {
     const supabase = createClient();
-    const { data, error } = await supabase
+    const { data: city } = await supabase.from("cities").select("id").eq("slug", "karachi").single();
+    let query = supabase
       .from("restaurants")
       .select("*")
       .eq("is_approved", true)
       .eq("is_active", true)
       .order("rating_avg", { ascending: false })
+      .order("review_count", { ascending: false })
       .limit(limit);
+
+    if (city) {
+      query = query.eq("city_id", city.id);
+    }
+
+    const { data, error } = await query;
 
     if (error || !data) return [];
     return data.map(mapRestaurant);
@@ -48,14 +56,27 @@ export const supabaseData = {
   async search(params: {
     query?: string;
     category?: string;
+    city?: string;
     limit?: number;
+    offset?: number;
   }): Promise<Restaurant[]> {
     const supabase = createClient();
+    const limit = params.limit || 24;
+    const offset = params.offset || 0;
+    const citySlug = params.city || "karachi";
+
+    const { data: city } = await supabase.from("cities").select("id").eq("slug", citySlug).single();
+    if (!city) return [];
+
     let query = supabase
       .from("restaurants")
       .select("*, categories!inner(slug)")
       .eq("is_approved", true)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .eq("city_id", city.id)
+      .order("rating_avg", { ascending: false })
+      .order("review_count", { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (params.query) {
       query = query.or(
@@ -67,18 +88,64 @@ export const supabaseData = {
       query = query.eq("categories.slug", params.category);
     }
 
-    const { data, error } = await query.limit(params.limit || 24);
+    const { data, error } = await query;
     if (error || !data) {
-      // Fallback without category join
-      const { data: fallback } = await supabase
+      let fallback = supabase
         .from("restaurants")
         .select("*")
         .eq("is_approved", true)
         .eq("is_active", true)
-        .limit(params.limit || 24);
-      return (fallback || []).map(mapRestaurant);
+        .eq("city_id", city.id)
+        .order("rating_avg", { ascending: false })
+        .order("review_count", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (params.query) {
+        fallback = fallback.or(
+          `name.ilike.%${params.query}%,cuisine.ilike.%${params.query}%,address.ilike.%${params.query}%`
+        );
+      }
+
+      const { data: rows } = await fallback;
+      return (rows || []).map(mapRestaurant);
     }
     return data.map(mapRestaurant);
+  },
+
+  async countRestaurants(params: { query?: string; category?: string; city?: string }): Promise<number> {
+    const supabase = createClient();
+    const citySlug = params.city || "karachi";
+    const { data: city } = await supabase.from("cities").select("id").eq("slug", citySlug).single();
+    if (!city) return 0;
+
+    let query = supabase
+      .from("restaurants")
+      .select("id, categories!inner(slug)", { count: "exact", head: true })
+      .eq("is_approved", true)
+      .eq("is_active", true)
+      .eq("city_id", city.id);
+
+    if (params.query) {
+      query = query.or(
+        `name.ilike.%${params.query}%,cuisine.ilike.%${params.query}%,address.ilike.%${params.query}%`
+      );
+    }
+
+    if (params.category) {
+      query = query.eq("categories.slug", params.category);
+    }
+
+    const { count, error } = await query;
+    if (error) {
+      const { count: fallbackCount } = await supabase
+        .from("restaurants")
+        .select("id", { count: "exact", head: true })
+        .eq("is_approved", true)
+        .eq("is_active", true)
+        .eq("city_id", city.id);
+      return fallbackCount || 0;
+    }
+    return count || 0;
   },
 
   async getRestaurant(slug: string): Promise<RestaurantDetail | null> {

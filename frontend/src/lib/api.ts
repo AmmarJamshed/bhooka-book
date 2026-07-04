@@ -33,9 +33,27 @@ export const api = {
     });
     return withFallback(
       () => fetchAPI<Restaurant[]>(`/restaurants/search?${qs}`),
-      () => supabaseData.search({ query: params.query as string, category: params.category as string, limit: params.limit as number })
+      () =>
+        supabaseData.search({
+          query: params.query as string,
+          category: params.category as string,
+          city: (params.city as string) || "karachi",
+          limit: params.limit as number,
+          offset: params.offset as number,
+        })
     );
   },
+
+  countRestaurants: (params: Record<string, string | undefined>) =>
+    withFallback(
+      () => fetchAPI<{ count: number }>(`/restaurants/count?${new URLSearchParams(params as Record<string, string>)}`).then((r) => r.count),
+      () =>
+        supabaseData.countRestaurants({
+          query: params.query,
+          category: params.category,
+          city: params.city || "karachi",
+        })
+    ),
 
   getTrending: () =>
     withFallback(

@@ -2,14 +2,17 @@
 
 /** Search page with natural language queries and filters */
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { SearchBar } from "@/components/search-bar";
 import { QuickFilters } from "@/components/quick-filters";
 import { RestaurantCard } from "@/components/restaurant-card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+
+const PAGE_SIZE = 48;
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -17,22 +20,40 @@ function SearchContent() {
   const category = searchParams.get("category") || undefined;
   const cuisine = searchParams.get("cuisine") || undefined;
 
-  const { data: restaurants, isLoading } = useQuery({
-    queryKey: ["search", query, category, cuisine],
+  const { data: totalCount } = useQuery({
+    queryKey: ["search-count", query, category, cuisine],
     queryFn: () =>
+      api.countRestaurants({
+        query: query || undefined,
+        category,
+        city: "karachi",
+      }),
+  });
+
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
+    queryKey: ["search", query, category, cuisine],
+    queryFn: ({ pageParam = 0 }) =>
       api.searchRestaurants({
         query: query || undefined,
         category,
         cuisine,
-        limit: 24,
+        city: "karachi",
+        limit: PAGE_SIZE,
+        offset: pageParam,
       }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastPageParam) =>
+      lastPage.length < PAGE_SIZE ? undefined : lastPageParam + PAGE_SIZE,
   });
+
+  const restaurants = data?.pages.flat() ?? [];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-accent md:text-3xl">Find Your Perfect Spot</h1>
+      <h1 className="text-2xl font-bold text-accent md:text-3xl">Karachi Restaurants</h1>
       <p className="mt-1 text-muted-foreground">
-        Search by name, cuisine, area, or ask naturally — &quot;Chinese food under Rs.4000&quot;
+        Browse {totalCount ? `${totalCount.toLocaleString()} restaurants` : "restaurants"} across Karachi — search by
+        name, cuisine, or area
       </p>
 
       <div className="mt-6">
@@ -49,14 +70,29 @@ function SearchContent() {
               <Skeleton key={i} className="h-80 rounded-2xl" />
             ))}
           </div>
-        ) : restaurants && restaurants.length > 0 ? (
+        ) : restaurants.length > 0 ? (
           <>
-            <p className="mb-4 text-sm text-muted-foreground">{restaurants.length} restaurants found</p>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Showing {restaurants.length.toLocaleString()}
+              {totalCount ? ` of ${totalCount.toLocaleString()}` : ""} restaurants
+            </p>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {restaurants.map((r, i) => (
                 <RestaurantCard key={r.id} restaurant={r} index={i} />
               ))}
             </div>
+            {hasNextPage && (
+              <div className="mt-8 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? "Loading..." : "Load more restaurants"}
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <div className="glass rounded-2xl p-12 text-center">

@@ -33,6 +33,12 @@ Thumbs.db
 dist/
 build/
 
+# Generated import SQL (regenerate from scripts + JSON)
+data/*.sql
+data/sql_parts/
+data/chunk_*.sql
+data/batch*.sql
+
 # Logs
 *.log
 
