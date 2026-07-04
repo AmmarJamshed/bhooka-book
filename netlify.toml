@@ -1,0 +1,25 @@
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_PUBLIC_SUPABASE_URL = "https://fpyfshycjtqqrfggvcay.supabase.co"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZweWZzaHljanRxcXJmZ2d2Y2F5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjE4ODUsImV4cCI6MjA5Mjc5Nzg4NX0.Xwrd1VYzb_GDf1hw7usRoj23v006p9wZWHJKu_1EwpA"
+  NEXT_PUBLIC_API_URL = "https://bhooka-book-api.onrender.com/api/v1"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"
