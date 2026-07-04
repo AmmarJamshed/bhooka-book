@@ -35,6 +35,10 @@ jobs:
       - name: Install Netlify CLI
         run: npm install -g netlify-cli
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
       - name: Deploy to Netlify
         run: netlify deploy --prod --build
         env:
