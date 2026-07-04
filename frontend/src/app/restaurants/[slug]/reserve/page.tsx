@@ -1,12 +1,11 @@
 "use client";
 
-/** Reservation form — standard and AI booking */
+/** Reservation form */
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Bot, CalendarCheck, CheckCircle } from "lucide-react";
+import { CalendarCheck, CheckCircle, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { LinkButton } from "@/components/link-button";
 import { Button } from "@/components/ui/button";
@@ -16,11 +15,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores";
 
+function phoneHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+}
+
 function ReserveForm() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const slug = params.slug as string;
-  const isAI = searchParams.get("ai") === "true";
   const token = useAuthStore((s) => s.token);
 
   const [form, setForm] = useState({
@@ -40,7 +41,7 @@ function ReserveForm() {
       non_smoking: true,
     },
   });
-  const [confirmed, setConfirmed] = useState<{ code?: string; ai?: boolean } | null>(null);
+  const [confirmed, setConfirmed] = useState<{ code?: string } | null>(null);
 
   const { data: restaurant } = useQuery({
     queryKey: ["restaurant", slug],
@@ -48,11 +49,10 @@ function ReserveForm() {
   });
 
   const mutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      isAI ? api.createAIReservation(data, token ?? undefined) : api.createReservation(data, token ?? undefined),
+    mutationFn: (data: Record<string, unknown>) => api.createReservation(data, token ?? undefined),
     onSuccess: (res) => {
-      setConfirmed({ code: res.confirmation_code, ai: res.is_ai_booking });
-      toast.success(isAI ? "AI is calling the restaurant!" : "Reservation confirmed!");
+      setConfirmed({ code: res.confirmation_code });
+      toast.success("Reservation confirmed!");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -63,7 +63,7 @@ function ReserveForm() {
     mutation.mutate({
       restaurant_id: restaurant.id,
       ...form,
-      is_ai_booking: isAI,
+      is_ai_booking: false,
     });
   };
 
@@ -78,14 +78,8 @@ function ReserveForm() {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <CheckCircle className="mx-auto h-16 w-16 text-success" />
-        <h1 className="mt-4 text-2xl font-bold">
-          {confirmed.ai ? "AI Reservation Initiated" : "Reservation Confirmed!"}
-        </h1>
-        <p className="mt-2 text-muted-foreground">
-          {confirmed.ai
-            ? "Our AI voice agent is calling the restaurant. You'll receive a confirmation shortly."
-            : `Your confirmation code: ${confirmed.code}`}
-        </p>
+        <h1 className="mt-4 text-2xl font-bold">Reservation Confirmed!</h1>
+        <p className="mt-2 text-muted-foreground">Your confirmation code: {confirmed.code}</p>
         <LinkButton href="/reservations" className="mt-6 rounded-full">
           View My Reservations
         </LinkButton>
@@ -96,16 +90,25 @@ function ReserveForm() {
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       <div className="mb-6 flex items-center gap-3">
-        {isAI ? <Bot className="h-8 w-8 text-primary" /> : <CalendarCheck className="h-8 w-8 text-primary" />}
+        <CalendarCheck className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold">{isAI ? "AI Reservation" : "Reserve a Table"}</h1>
+          <h1 className="text-2xl font-bold">Reserve a Table</h1>
           <p className="text-muted-foreground">{restaurant?.name}</p>
         </div>
       </div>
 
-      {isAI && (
-        <div className="mb-6 rounded-xl bg-primary/5 p-4 text-sm text-muted-foreground">
-          Our AI will call the restaurant on your behalf using voice AI. You&apos;ll get a confirmation once the call completes.
+      {restaurant?.phone && (
+        <div className="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <p className="text-sm text-muted-foreground">
+            Prefer to book by phone? Call the restaurant directly:
+          </p>
+          <a
+            href={phoneHref(restaurant.phone)}
+            className="mt-2 inline-flex items-center gap-2 font-semibold text-primary hover:underline"
+          >
+            <Phone className="h-4 w-4" />
+            {restaurant.phone}
+          </a>
         </div>
       )}
 
@@ -156,7 +159,7 @@ function ReserveForm() {
         </div>
 
         <Button type="submit" disabled={mutation.isPending} className="w-full rounded-full bg-primary hover:bg-primary/90">
-          {mutation.isPending ? "Processing..." : isAI ? "Start AI Reservation Call" : "Confirm Reservation"}
+          {mutation.isPending ? "Processing..." : "Confirm Reservation"}
         </Button>
       </form>
     </div>

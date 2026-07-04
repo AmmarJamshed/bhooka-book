@@ -20,6 +20,13 @@ export function RushIndicator({ rush, showDetails = true }: { rush: RushInfo; sh
             <Clock className="h-4 w-4" />
             ~{rush.estimated_wait_minutes} min wait
           </span>
+          {rush.forecast_live ? (
+            <span className="text-xs text-success">Live forecast until closing</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Rush forecast from {rush.forecast_starts_at || "1pm PKT"}
+            </span>
+          )}
           <span className="text-xs text-muted-foreground">
             Confidence: {Math.round(rush.confidence_score * 100)}%
           </span>

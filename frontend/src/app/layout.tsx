@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s | Bhooka Book",
   },
   description:
-    "Discover restaurants, check live busyness, reserve tables, and let our AI voice agent call restaurants for you. Pakistan's smartest dining companion.",
+    "Discover restaurants, check live rush forecasts, reserve tables, browse card discounts, and call restaurants to book. Pakistan's smartest dining companion.",
   keywords: ["restaurant", "reservation", "Pakistan", "Karachi", "Lahore", "AI", "dining"],
   authors: [{ name: "Bhooka Book" }],
   openGraph: {

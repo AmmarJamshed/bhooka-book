@@ -7,6 +7,8 @@ export interface RushInfo {
   estimated_wait_minutes: number;
   confidence_score: number;
   rush_level: RushLevel;
+  forecast_live?: boolean;
+  forecast_starts_at?: string;
 }
 
 export interface Restaurant {
@@ -19,6 +21,7 @@ export interface Restaurant {
   review_count: number;
   average_price?: number;
   address?: string;
+  phone?: string;
   latitude?: number;
   longitude?: number;
   distance_km?: number;
@@ -101,6 +104,11 @@ export interface SpecialOffer {
   title: string;
   description?: string;
   discount_percent?: number;
+  card_name?: string;
+  bank_name?: string;
+  source?: string;
+  terms?: string;
+  valid_until?: string;
   restaurant: { name: string; slug: string; cover_image_url?: string };
 }
 

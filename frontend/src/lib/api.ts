@@ -90,18 +90,17 @@ export const api = {
       () => supabaseData.getOffers()
     ),
 
+  getRestaurantOffers: (slug: string) =>
+    withFallback(
+      () => fetchAPI<SpecialOffer[]>(`/restaurants/${slug}/offers`),
+      () => supabaseData.getOffersForRestaurant(slug)
+    ),
+
   getReviews: (slug: string) =>
     fetchAPI<Review[]>(`/restaurants/${slug}/reviews`).catch(() => []),
 
   createReservation: (data: Record<string, unknown>, token?: string) =>
     fetchAPI<Reservation>("/reservations", {
-      method: "POST",
-      body: JSON.stringify(data),
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }),
-
-  createAIReservation: (data: Record<string, unknown>, token?: string) =>
-    fetchAPI<Reservation>("/reservations/ai", {
       method: "POST",
       body: JSON.stringify(data),
       headers: token ? { Authorization: `Bearer ${token}` } : {},

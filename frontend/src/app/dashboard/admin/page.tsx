@@ -35,7 +35,7 @@ export default function AdminDashboardPage() {
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <Card className="glass border-0">
           <CardHeader><CardTitle className="flex items-center gap-2"><Bot className="h-5 w-5 text-primary" />AI Usage</CardTitle></CardHeader>
-          <CardContent><p className="text-muted-foreground">Groq API calls, chat sessions, and voice agent metrics.</p></CardContent>
+          <CardContent><p className="text-muted-foreground">Groq API calls and chat session metrics.</p></CardContent>
         </Card>
         <Card className="glass border-0">
           <CardHeader><CardTitle className="flex items-center gap-2"><Phone className="h-5 w-5 text-primary" />Voice Call Logs</CardTitle></CardHeader>

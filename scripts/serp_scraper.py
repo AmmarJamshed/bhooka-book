@@ -8,7 +8,6 @@ then generates hourly rush forecasts for the rest of the day.
 import asyncio
 import os
 import sys
-from datetime import datetime
 
 import httpx
 from sqlalchemy import select
@@ -18,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from app.models import Restaurant, SerpTrafficSnapshot  # noqa: E402
-from app.services.rush_prediction import forecast_day_from_serp  # noqa: E402
+from app.services.rush_prediction import forecast_day_from_serp, now_pkt  # noqa: E402
 
 
 SERP_API_KEY = os.environ["SERP_API_KEY"]
@@ -68,7 +67,7 @@ async def run_scraper() -> None:
             )
         )
         restaurants = result.scalars().all()
-        print(f"Scraping {len(restaurants)} restaurants at {datetime.utcnow().isoformat()}")
+        print(f"Scraping {len(restaurants)} restaurants at {now_pkt().isoformat()} (PKT)")
 
         for restaurant in restaurants:
             try:
@@ -77,10 +76,11 @@ async def run_scraper() -> None:
                     continue
 
                 popular_times, current_pop, rating, review_count = extract_popular_times(data)
+                scraped_at = now_pkt().replace(tzinfo=None)
 
                 snapshot = SerpTrafficSnapshot(
                     restaurant_id=restaurant.id,
-                    scraped_at=datetime.utcnow(),
+                    scraped_at=scraped_at,
                     google_place_id=restaurant.google_place_id,
                     popular_times=popular_times,
                     current_popularity=current_pop,
@@ -91,8 +91,13 @@ async def run_scraper() -> None:
                 db.add(snapshot)
                 await db.flush()
 
-                # Generate hourly forecasts from this anchor
-                await forecast_day_from_serp(db, str(restaurant.id), snapshot)
+                # Hourly forecasts from 1pm PKT until closing
+                await forecast_day_from_serp(
+                    db,
+                    str(restaurant.id),
+                    snapshot,
+                    restaurant.opening_hours or {},
+                )
 
                 # Update restaurant rating if available
                 if rating:

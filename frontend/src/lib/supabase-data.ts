@@ -3,16 +3,77 @@
 import { createClient } from "@/lib/supabase";
 import type { Category, Restaurant, RestaurantDetail, RushInfo, SpecialOffer } from "@/types";
 
-function defaultRush(): RushInfo {
+const FORECAST_START_HOUR = 13;
+
+function pktNow(): { hour: number; dow: number; beforeForecast: boolean } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Karachi",
+    hour: "numeric",
+    hour12: false,
+    weekday: "short",
+  }).formatToParts(new Date());
+
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
+  const weekday = parts.find((p) => p.type === "weekday")?.value || "Mon";
+  const dowMap: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+  const dow = dowMap[weekday.slice(0, 3)] ?? 0;
+  return { hour, dow, beforeForecast: hour < FORECAST_START_HOUR };
+}
+
+function defaultRush(beforeForecast: boolean): RushInfo {
   return {
-    rush_percentage: 45,
-    estimated_wait_minutes: 20,
-    confidence_score: 0.5,
-    rush_level: "moderate",
+    rush_percentage: beforeForecast ? 35 : 45,
+    estimated_wait_minutes: beforeForecast ? 15 : 20,
+    confidence_score: beforeForecast ? 0.35 : 0.5,
+    rush_level: beforeForecast ? "quiet" : "moderate",
+    forecast_live: false,
+    forecast_starts_at: "13:00 PKT",
   };
 }
 
-function mapRestaurant(row: Record<string, unknown>): Restaurant {
+function mapRushRow(row: Record<string, unknown>): RushInfo {
+  return {
+    rush_percentage: Number(row.rush_percentage) || 0,
+    estimated_wait_minutes: Number(row.estimated_wait_minutes) || 0,
+    confidence_score: Number(row.confidence_score) || 0.75,
+    rush_level: (row.rush_level as RushInfo["rush_level"]) || "moderate",
+    forecast_live: true,
+    forecast_starts_at: "13:00 PKT",
+  };
+}
+
+async function fetchRushMap(restaurantIds: string[]): Promise<Map<string, RushInfo>> {
+  const map = new Map<string, RushInfo>();
+  if (restaurantIds.length === 0) return map;
+
+  const { hour, dow, beforeForecast } = pktNow();
+  if (beforeForecast) return map;
+
+  const supabase = createClient();
+  const since = new Date();
+  since.setHours(since.getHours() - 18);
+
+  const { data } = await supabase
+    .from("rush_history")
+    .select("restaurant_id, rush_percentage, estimated_wait_minutes, confidence_score, rush_level, recorded_at")
+    .in("restaurant_id", restaurantIds)
+    .eq("source", "serp_forecast")
+    .eq("hour_of_day", hour)
+    .eq("day_of_week", dow)
+    .gte("recorded_at", since.toISOString())
+    .order("recorded_at", { ascending: false });
+
+  for (const row of data || []) {
+    const id = row.restaurant_id as string;
+    if (!map.has(id)) {
+      map.set(id, mapRushRow(row as Record<string, unknown>));
+    }
+  }
+  return map;
+}
+
+function mapRestaurant(row: Record<string, unknown>, rush?: RushInfo): Restaurant {
+  const { beforeForecast } = pktNow();
   return {
     id: row.id as string,
     name: row.name as string,
@@ -23,10 +84,31 @@ function mapRestaurant(row: Record<string, unknown>): Restaurant {
     review_count: Number(row.review_count) || 0,
     average_price: row.average_price ? Number(row.average_price) : undefined,
     address: (row.address as string) || undefined,
+    phone: (row.phone as string) || undefined,
     latitude: row.latitude ? Number(row.latitude) : undefined,
     longitude: row.longitude ? Number(row.longitude) : undefined,
     is_open: true,
-    rush: defaultRush(),
+    rush: rush || defaultRush(beforeForecast),
+  };
+}
+
+function mapOffer(o: Record<string, unknown>): SpecialOffer {
+  const restaurant = o.restaurants as Record<string, string> | null;
+  return {
+    id: o.id as string,
+    title: o.title as string,
+    description: o.description as string | undefined,
+    discount_percent: o.discount_percent as number | undefined,
+    card_name: o.card_name as string | undefined,
+    bank_name: o.bank_name as string | undefined,
+    source: o.source as string | undefined,
+    terms: o.terms as string | undefined,
+    valid_until: o.valid_until as string | undefined,
+    restaurant: {
+      name: restaurant?.name || "",
+      slug: restaurant?.slug || "",
+      cover_image_url: restaurant?.cover_image_url,
+    },
   };
 }
 
@@ -48,9 +130,10 @@ export const supabaseData = {
     }
 
     const { data, error } = await query;
-
     if (error || !data) return [];
-    return data.map(mapRestaurant);
+
+    const rushMap = await fetchRushMap(data.map((r) => r.id as string));
+    return data.map((row) => mapRestaurant(row as Record<string, unknown>, rushMap.get(row.id as string)));
   },
 
   async search(params: {
@@ -89,6 +172,7 @@ export const supabaseData = {
     }
 
     const { data, error } = await query;
+    let rows = data;
     if (error || !data) {
       let fallback = supabase
         .from("restaurants")
@@ -106,10 +190,13 @@ export const supabaseData = {
         );
       }
 
-      const { data: rows } = await fallback;
-      return (rows || []).map(mapRestaurant);
+      const { data: fallbackRows } = await fallback;
+      rows = fallbackRows;
     }
-    return data.map(mapRestaurant);
+
+    const list = rows || [];
+    const rushMap = await fetchRushMap(list.map((r) => r.id as string));
+    return list.map((row) => mapRestaurant(row as Record<string, unknown>, rushMap.get(row.id as string)));
   },
 
   async countRestaurants(params: { query?: string; category?: string; city?: string }): Promise<number> {
@@ -158,7 +245,9 @@ export const supabaseData = {
       .single();
 
     if (error || !data) return null;
-    const base = mapRestaurant(data);
+
+    const rushMap = await fetchRushMap([data.id as string]);
+    const base = mapRestaurant(data as Record<string, unknown>, rushMap.get(data.id as string));
     return {
       ...base,
       description: data.description || undefined,
@@ -167,7 +256,7 @@ export const supabaseData = {
       opening_hours: data.opening_hours || {},
       facilities: data.facilities || {},
       is_halal: data.is_halal ?? true,
-      accepts_ai_bookings: data.accepts_ai_bookings ?? true,
+      accepts_ai_bookings: false,
     };
   },
 
@@ -183,19 +272,25 @@ export const supabaseData = {
       .from("special_offers")
       .select("*, restaurants(name, slug, cover_image_url)")
       .eq("is_active", true)
-      .limit(6);
+      .order("discount_percent", { ascending: false })
+      .limit(12);
 
-    return (data || []).map((o: Record<string, unknown>) => ({
-      id: o.id as string,
-      title: o.title as string,
-      description: o.description as string | undefined,
-      discount_percent: o.discount_percent as number | undefined,
-      restaurant: {
-        name: (o.restaurants as Record<string, string>)?.name,
-        slug: (o.restaurants as Record<string, string>)?.slug,
-        cover_image_url: (o.restaurants as Record<string, string>)?.cover_image_url,
-      },
-    }));
+    return (data || []).map((o) => mapOffer(o as Record<string, unknown>));
+  },
+
+  async getOffersForRestaurant(slug: string): Promise<SpecialOffer[]> {
+    const supabase = createClient();
+    const { data: restaurant } = await supabase.from("restaurants").select("id").eq("slug", slug).single();
+    if (!restaurant) return [];
+
+    const { data } = await supabase
+      .from("special_offers")
+      .select("*, restaurants(name, slug, cover_image_url)")
+      .eq("restaurant_id", restaurant.id)
+      .eq("is_active", true)
+      .order("discount_percent", { ascending: false });
+
+    return (data || []).map((o) => mapOffer(o as Record<string, unknown>));
   },
 
   async getMenu(slug: string) {

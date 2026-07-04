@@ -4,9 +4,8 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Clock, MapPin, Star, Users } from "lucide-react";
+import { Clock, MapPin, Phone, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Restaurant } from "@/types";
@@ -15,6 +14,10 @@ import { RUSH_COLORS, RUSH_LABELS } from "@/types";
 interface RestaurantCardProps {
   restaurant: Restaurant;
   index?: number;
+}
+
+function phoneHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
 }
 
 export function RestaurantCard({ restaurant, index = 0 }: RestaurantCardProps) {
@@ -83,10 +86,19 @@ export function RestaurantCard({ restaurant, index = 0 }: RestaurantCardProps) {
             <LinkButton href={`/restaurants/${restaurant.slug}/reserve`} className="flex-1 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground">
               Reserve
             </LinkButton>
-            <LinkButton href={`/restaurants/${restaurant.slug}/reserve?ai=true`} variant="outline" className="flex-1 rounded-full border-primary text-primary hover:bg-primary/5">
-              <Users className="mr-1 h-4 w-4" />
-              AI Reserve
-            </LinkButton>
+            {restaurant.phone ? (
+              <a
+                href={phoneHref(restaurant.phone)}
+                className="inline-flex flex-1 items-center justify-center rounded-full border border-primary px-3 py-2 text-sm font-medium text-primary hover:bg-primary/5"
+              >
+                <Phone className="mr-1 h-4 w-4" />
+                Call
+              </a>
+            ) : (
+              <LinkButton href={`/restaurants/${restaurant.slug}`} variant="outline" className="flex-1 rounded-full border-primary text-primary hover:bg-primary/5">
+                Details
+              </LinkButton>
+            )}
           </div>
         </CardContent>
       </Card>

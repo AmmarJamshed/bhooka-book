@@ -42,7 +42,7 @@ export default function HomePage() {
               Pakistan&apos;s AI Restaurant Concierge
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Discover restaurants · Check busyness · Reserve tables · AI calls for you
+              Discover restaurants · Live rush forecasts · Reserve tables · Call to book
             </p>
           </motion.div>
 
@@ -103,7 +103,7 @@ export default function HomePage() {
           <div className="mx-auto max-w-7xl">
             <h2 className="mb-6 flex items-center gap-2 text-2xl font-bold text-accent">
               <Tag className="h-6 w-6 text-primary" />
-              Special Offers
+              Special Offers & Card Discounts
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {offers.map((offer) => (
@@ -114,6 +114,9 @@ export default function HomePage() {
                 >
                   <h3 className="font-semibold text-accent">{offer.title}</h3>
                   <p className="mt-1 text-sm text-muted-foreground">{offer.restaurant.name}</p>
+                  {offer.card_name && (
+                    <p className="mt-1 text-xs font-medium text-primary">{offer.card_name}</p>
+                  )}
                   {offer.discount_percent && (
                     <span className="mt-2 inline-block rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
                       {offer.discount_percent}% off
@@ -130,9 +133,9 @@ export default function HomePage() {
       <section className="mx-auto max-w-7xl px-4 py-16 text-center">
         <div className="glass mx-auto max-w-2xl rounded-3xl p-8 md:p-12">
           <MapPin className="mx-auto h-10 w-10 text-primary" />
-          <h2 className="mt-4 text-2xl font-bold text-accent">Dine Smarter with AI</h2>
+          <h2 className="mt-4 text-2xl font-bold text-accent">Dine Smarter</h2>
           <p className="mt-2 text-muted-foreground">
-            Our AI voice agent calls restaurants for you. No more waiting on hold.
+            Check live rush forecasts after 1pm, browse card discounts from Peekaboo Guru, and call restaurants directly to book.
           </p>
           <LinkButton href="/concierge" className="mt-6 rounded-full bg-primary px-8 hover:bg-primary/90 text-primary-foreground">
             Try AI Concierge
