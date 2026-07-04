@@ -2,7 +2,7 @@
 
 /** User profile and auth */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { User, LogOut, Heart, Calendar, Settings } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ export default function ProfilePage() {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
